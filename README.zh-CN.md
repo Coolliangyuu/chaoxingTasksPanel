@@ -6,6 +6,18 @@
 
 `Windows x64` · `C# / .NET 10` · `WinForms` · `v1.4.9`
 
+## 界面截图
+
+截图来自离线演示版，作业和账号均为虚构数据。
+
+### 作业看板
+
+![显示提交状态和截止时间的作业看板](screenshots/demo-dashboard.png)
+
+### 账号管理
+
+![显示四个虚构账号的账号管理窗口](screenshots/demo-accounts.png)
+
 ## 功能
 
 | 功能 | 说明 |

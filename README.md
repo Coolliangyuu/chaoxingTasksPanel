@@ -6,6 +6,18 @@ A Windows desktop dashboard for Chaoxing (Xuexitong) assignments. See what is du
 
 `Windows x64` · `C# / .NET 10` · `WinForms` · `v1.4.9`
 
+## Screenshots
+
+The screenshots use fictional assignments and accounts from the offline demo.
+
+### Assignment dashboard
+
+![Assignment dashboard with submission status and deadlines](screenshots/demo-dashboard.png)
+
+### Account management
+
+![Account management with four fictional accounts](screenshots/demo-accounts.png)
+
 ## Features
 
 | Feature | Description |
