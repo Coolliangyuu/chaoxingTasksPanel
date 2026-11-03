@@ -59,8 +59,8 @@ internal sealed class HomeworkDetails : Form
         this.isAttachmentPreview = isAttachmentPreview;
         Icon = Program.WindowIcon;
         Font = new Font("Microsoft YaHei UI", 10F);
-        StartPosition = FormStartPosition.CenterParent;
-        ShowInTaskbar = false;
+        StartPosition = isAttachmentPreview ? FormStartPosition.CenterParent : FormStartPosition.CenterScreen;
+        ShowInTaskbar = !isAttachmentPreview;
         MinimumSize = new Size(640, 460);
         ClientSize = new Size(1140, 820);
 

@@ -153,6 +153,8 @@ public partial class Form1 : Form
         Shown += async (_, _) => await InitializeBrowser();
         FormClosed += (_, _) =>
         {
+            foreach (var detailWindow in openDetails.Values.ToArray())
+                detailWindow.Close();
             foreach (var check in accountChecks.Values) check.Cancel.Cancel();
             clock.Dispose();
             refreshTimer.Dispose();
@@ -545,7 +547,7 @@ public partial class Form1 : Form
             details = new HomeworkDetails(core.Environment, account, homework.Title, url);
             openDetails.Add(key, details);
             details.FormClosed += (_, _) => openDetails.Remove(key);
-            details.Show(this);
+            details.Show();
         }
         return true;
     }
