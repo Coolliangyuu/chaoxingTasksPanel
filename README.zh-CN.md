@@ -4,7 +4,7 @@
 
 一个用来汇总超星学习通作业的 Windows 桌面应用。打开看板即可查看各门课的作业、提交状态和截止倒计时，也能直接打开作业详情、下载附件和切换账号。
 
-`Windows x64` · `C# / .NET 10` · `WinForms` · `v1.4.9`
+`Windows x64` · `C# / .NET 10` · `WinForms` · `v1.4.10`
 
 ## 界面截图
 
@@ -18,17 +18,21 @@
 
 ![显示四个虚构账号的账号管理窗口](screenshots/demo-accounts.png)
 
+### 设置
+
+![可选择更新源并查看日志的设置窗口](screenshots/demo-settings.png)
+
 ## 功能
 
 | 功能 | 说明 |
 | --- | --- |
 | 作业看板 | 显示作业、课程、提交状态、北京时间截止时间和剩余时间。 |
-| 筛选与排序 | 筛选待处理或已完成的作业。点击「提交状态」「截止时间」或「距离截止」切换排序方向，点击「作业」恢复默认顺序。 |
+| 筛选与排序 | 筛选待处理或已完成的作业。点击「提交状态」「截止时间」或「距离截止」切换排序方向，截止未交的作业单独标记，点击「作业」恢复默认顺序。 |
 | 自动刷新 | 看板每 5 分钟检查一次，也可以点击「立即刷新」。 |
 | 详情与附件 | 点击「查看详情」独立打开每个作业，可通过 Alt+Tab 或任务栏预览切换。下载附件时可以选择文件名和保存位置。 |
 | 多账号管理 | 自动显示姓名和脱敏手机号，各账号的登录会话独立保存。支持添加、切换和退出账号。 |
 | 登录状态 | 启动时检查会话状态，显示是否已登录、会话是否仅限本次以及可确认的保留期限。 |
-| 内置版本日志 | 点击看板右下角的「查看日志」，可以滚动查看并复制版本记录。 |
+| 内置版本日志 | 点击看板右下角的「设置」，可以查看并复制版本日志，也可以选择 GitHub 或 Gitee 检查更新。 |
 
 ## 开始使用
 
@@ -53,7 +57,7 @@ dotnet run --project StudyTasks/StudyTasks.csproj
 构建 Windows x64 单文件版本。
 
 ```powershell
-dotnet publish StudyTasks/StudyTasks.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist
+dotnet publish StudyTasks/StudyTasks.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist
 ```
 
 生成的可执行文件位于 `dist/StudyTasks.exe`。

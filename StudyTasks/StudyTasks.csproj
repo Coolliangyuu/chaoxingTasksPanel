@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyTitle>学习通作业看板</AssemblyTitle>
     <Product>学习通作业看板</Product>
-    <Version>1.4.9</Version>
+    <Version>1.4.10</Version>
     <ApplicationIcon>StudyTasks.ico</ApplicationIcon>
   </PropertyGroup>
 

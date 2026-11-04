@@ -4,7 +4,7 @@
 
 A Windows desktop dashboard for Chaoxing (Xuexitong) assignments. See what is due across your courses, check submission status, and open assignment details or download attachments from the dashboard.
 
-`Windows x64` · `C# / .NET 10` · `WinForms` · `v1.4.9`
+`Windows x64` · `C# / .NET 10` · `WinForms` · `v1.4.10`
 
 ## Screenshots
 
@@ -18,17 +18,21 @@ The screenshots use fictional assignments and accounts from the offline demo.
 
 ![Account management with four fictional accounts](screenshots/demo-accounts.png)
 
+### Settings
+
+![Settings with update source selection and version history](screenshots/demo-settings.png)
+
 ## Features
 
 | Feature | Description |
 | --- | --- |
 | Assignment dashboard | See each assignment, its course, submission status, deadline in Beijing time, and time remaining. |
-| Filtering and sorting | Filter pending or completed assignments. Click a status, deadline, or time-remaining column header to toggle its sort order. Click the assignment header to restore the default order. |
+| Filtering and sorting | Filter pending or completed assignments. Click a status, deadline, or time-remaining column header to toggle its sort order. Overdue, unsubmitted assignments have their own submission status. Click the assignment header to restore the default order. |
 | Automatic refresh | The dashboard checks for updates every five minutes. Select Refresh Now to sync on demand. |
 | Assignment details and downloads | Open each assignment in its own window and switch between assignments via Alt+Tab or taskbar previews. Choose where to save downloaded attachments. |
 | Multiple accounts | Add, switch, or sign out of accounts independently. Account management displays each account's name and masked phone number when available. |
 | Sign-in status | The app checks the current session at startup and shows whether you are signed in, whether the session is temporary, and its expiration when available. |
-| Version history | Open the built-in changelog from the bottom-right corner of the dashboard. |
+| Version history | Open Settings in the bottom-right corner to view the changelog or check for a newer release on GitHub or Gitee. |
 
 ## Getting started
 
@@ -53,7 +57,7 @@ dotnet run --project StudyTasks/StudyTasks.csproj
 To publish a self-contained, single-file build for Windows x64, run the following command.
 
 ```powershell
-dotnet publish StudyTasks/StudyTasks.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist
+dotnet publish StudyTasks/StudyTasks.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist
 ```
 
 The executable is saved to `dist/StudyTasks.exe`.

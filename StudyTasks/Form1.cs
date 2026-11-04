@@ -18,6 +18,7 @@ public partial class Form1 : Form
     private static readonly Color Ink = Color.FromArgb(21, 37, 56);
     private static readonly Color Muted = Color.FromArgb(84, 103, 122);
     private static readonly Color Accent = Color.FromArgb(16, 99, 125);
+    private static readonly Color HoverBackground = Color.FromArgb(218, 237, 245);
     private static readonly Color Canvas = Color.FromArgb(241, 246, 250);
     private WebView2 web = CreateBrowserView();
     private CoreWebView2Environment? browserEnvironment;
@@ -29,7 +30,7 @@ public partial class Form1 : Form
     private readonly Dictionary<string, (CancellationTokenSource Cancel, Task Task)> accountChecks = [];
     private AccountManager? accountDialog;
     private string? signingOutProfile;
-    private readonly DataGridView grid = new();
+    private readonly DataGridView grid = new HomeworkGrid();
     private readonly Panel body = new() { Dock = DockStyle.Fill, BackColor = Canvas };
     private readonly Label status = new() { AutoSize = true, ForeColor = Accent };
     private readonly Label detail = new() { Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
@@ -39,12 +40,13 @@ public partial class Form1 : Form
     private readonly Button official = MakeButton("学习通网页");
     private readonly Button dashboard = MakeButton("返回作业看板");
     private readonly Button accountManager = MakeButton("账号管理");
-    private readonly Label activeAccount = new() { AutoEllipsis = true, Width = 215, Height = 24, TextAlign = ContentAlignment.MiddleRight, ForeColor = Muted };
+    private readonly Label activeAccount = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Muted };
     private readonly System.Windows.Forms.Timer clock = new() { Interval = 1000 };
     private readonly System.Windows.Forms.Timer refreshTimer = new() { Interval = 300000 };
     private readonly Dictionary<(string Profile, string Url), HomeworkDetails> openDetails = [];
     private IReadOnlyList<Homework> tasks = [];
     private int sortColumn = -1;
+    private int hoveredRow = -1;
     private bool sortDescending;
     private bool waitingForLogin;
     private bool showOfficial;
@@ -54,6 +56,7 @@ public partial class Form1 : Form
     private ulong navigationId;
     private int navigationVersion;
     private DateTimeOffset? lastSync;
+    private DateTimeOffset? nextPendingDeadline;
 
     public Form1()
     {
@@ -63,7 +66,7 @@ public partial class Form1 : Form
         BackColor = Canvas;
         ForeColor = Ink;
         MinimumSize = new Size(800, 550);
-        ClientSize = new Size(1180, 800);
+        ClientSize = new Size(1280, 800);
         StartPosition = FormStartPosition.CenterScreen;
 
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(24, 14, 24, 16) };
@@ -75,15 +78,30 @@ public partial class Form1 : Form
         title.Font = new Font(title.Font.FontFamily, 21F, FontStyle.Bold);
         var header = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
         header.Controls.AddRange([title, status]);
-        var accountArea = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = Padding.Empty, Padding = new Padding(0, 8, 0, 0) };
+        var accountArea = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Top | AnchorStyles.Right, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Padding = new Padding(0, 8, 0, 0) };
+        accountArea.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        accountArea.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         activeAccount.Margin = new Padding(0, 5, 10, 0);
-        accountArea.Controls.AddRange([accountManager, activeAccount]);
+        activeAccount.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        accountArea.Controls.Add(activeAccount, 0, 0);
+        accountArea.Controls.Add(accountManager, 1, 0);
         var headerLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
         headerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        headerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
+        headerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         headerLayout.Controls.Add(header, 0, 0);
         headerLayout.Controls.Add(accountArea, 1, 0);
         shell.Controls.Add(headerLayout, 0, 0);
+        void FitAccountHeader()
+        {
+            int titleWidth = title.GetPreferredSize(Size.Empty).Width + title.Margin.Horizontal;
+            int buttonWidth = accountManager.GetPreferredSize(Size.Empty).Width + accountManager.Margin.Horizontal;
+            int available = headerLayout.ClientSize.Width - titleWidth - buttonWidth - activeAccount.Margin.Horizontal - 20;
+            activeAccount.MaximumSize = new Size(Math.Max(120, available), 0);
+            int titleHeight = title.PreferredHeight + title.Margin.Vertical + status.PreferredHeight + status.Margin.Vertical;
+            shell.RowStyles[0].Height = Math.Max(66, Math.Max(titleHeight, accountArea.GetPreferredSize(Size.Empty).Height) + 6);
+        }
+        headerLayout.SizeChanged += (_, _) => FitAccountHeader();
+        activeAccount.SizeChanged += (_, _) => FitAccountHeader();
         UpdateActiveAccount();
 
         var tools = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
@@ -108,17 +126,19 @@ public partial class Form1 : Form
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         detail.Margin = new Padding(0, 0, 8, 0);
         footer.Controls.Add(detail, 0, 0);
-        var versionLog = MakeButton("查看日志");
-        versionLog.Margin = Padding.Empty;
-        versionLog.Click += (_, _) =>
+        var settings = MakeButton("⚙ 设置");
+        settings.AccessibleName = "设置";
+        settings.Margin = Padding.Empty;
+        settings.Click += (_, _) =>
         {
-            using var dialog = new VersionLogDialog();
+            using var dialog = new SettingsDialog();
             dialog.ShowDialog(this);
         };
-        footer.Controls.Add(versionLog, 1, 0);
+        footer.Controls.Add(settings, 1, 0);
         shell.Controls.Add(footer, 0, 3);
         Controls.Add(shell);
         SetStatus("正在检查登录状态", "应用开启时每 5 分钟刷新一次。");
+        FitAccountHeader();
 
         refresh.Enabled = official.Enabled = dashboard.Enabled = accountManager.Enabled = false;
         accountManager.Click += async (_, _) => await ManageAccounts();
@@ -764,11 +784,32 @@ public partial class Form1 : Form
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         grid.MultiSelect = false;
         grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        grid.DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Ink, SelectionBackColor = Color.FromArgb(218, 237, 245), SelectionForeColor = Ink, Padding = new Padding(7, 0, 4, 0) };
+        grid.DefaultCellStyle = new DataGridViewCellStyle { ForeColor = Ink, Padding = new Padding(7, 0, 4, 0) };
+        grid.SelectionChanged += (_, _) =>
+        {
+            if (grid.SelectedCells.Count > 0) grid.ClearSelection();
+        };
+        grid.CellPainting += (_, e) =>
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.CellStyle is not { } style) return;
+            bool hovered = e.RowIndex == hoveredRow;
+            bool current = grid.CurrentCellAddress == new Point(e.ColumnIndex, e.RowIndex);
+            if (!hovered && !current) return;
+
+            var originalBackground = style.BackColor;
+            if (hovered) style.BackColor = HoverBackground;
+            e.Paint(e.ClipBounds, e.PaintParts & ~DataGridViewPaintParts.Focus);
+            style.BackColor = originalBackground;
+            e.Handled = true;
+        };
+        grid.MouseMove += (_, e) => SetHoveredRow(grid.HitTest(e.X, e.Y).RowIndex);
+        grid.MouseLeave += (_, _) => SetHoveredRow(-1);
+        grid.Scroll += (_, _) => RefreshHoveredRow();
+        grid.VisibleChanged += (_, _) => RefreshHoveredRow();
         grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Color.FromArgb(229, 240, 247), ForeColor = Ink, Font = new Font(Font, FontStyle.Bold), Padding = new Padding(7, 0, 4, 0) };
         string[] titles = ["作业", "课程", "提交状态", "截止时间（北京）", "距离截止"];
-        float[] weights = [29, 21, 13, 21, 16];
-        int[] minimumWidths = [126, 115, 88, 140, 112];
+        float[] weights = [25, 19, 15, 25, 16];
+        int[] minimumWidths = [126, 115, 120, 190, 112];
         for (int i = 0; i < titles.Length; i++)
         {
             bool sortable = i is StatusColumn or DeadlineColumn or CountdownColumn;
@@ -801,6 +842,29 @@ public partial class Form1 : Form
         grid.Columns.Add(details);
     }
 
+    private void RefreshHoveredRow()
+    {
+        if (!grid.Visible)
+        {
+            SetHoveredRow(-1);
+            return;
+        }
+        var pointer = grid.PointToClient(Cursor.Position);
+        SetHoveredRow(grid.ClientRectangle.Contains(pointer)
+            ? grid.HitTest(pointer.X, pointer.Y).RowIndex : -1);
+    }
+
+    private void SetHoveredRow(int rowIndex)
+    {
+        if (hoveredRow == rowIndex) return;
+        int previous = hoveredRow;
+        hoveredRow = rowIndex;
+        if (previous >= 0 && previous < grid.RowCount)
+            grid.InvalidateRow(previous);
+        if (hoveredRow >= 0 && hoveredRow < grid.RowCount)
+            grid.InvalidateRow(hoveredRow);
+    }
+
     private void ChangeSort(int column)
     {
         if (sortColumn >= 0 && sortColumn != column)
@@ -822,10 +886,10 @@ public partial class Form1 : Form
         if (grid.RowCount > 0) grid.FirstDisplayedScrollingRowIndex = 0;
     }
 
-    private IEnumerable<Homework> SortRows(IEnumerable<Homework> selected)
+    private IEnumerable<Homework> SortRows(IEnumerable<Homework> selected, DateTimeOffset now)
     {
         if (sortColumn == StatusColumn)
-            return selected.OrderBy(StatusRank).ThenBy(task => task.Deadline ?? DateTimeOffset.MaxValue);
+            return selected.OrderBy(task => StatusRank(task, now)).ThenBy(task => task.Deadline ?? DateTimeOffset.MaxValue);
 
         if (sortColumn is DeadlineColumn or CountdownColumn)
         {
@@ -833,44 +897,50 @@ public partial class Form1 : Form
             return sortDescending ? datedFirst.ThenByDescending(task => task.Deadline) : datedFirst.ThenBy(task => task.Deadline);
         }
 
-        return selected.OrderBy(task => task.Category == "pending" ? 0 : task.Category == "unknown" ? 1 : 2)
+        return selected.OrderBy(task => task.Category == "pending" && !task.IsExpired(now) ? 0 : task.Category == "unknown" ? 1 : 2)
             .ThenBy(task => task.Deadline ?? DateTimeOffset.MaxValue);
     }
 
-    private int StatusRank(Homework task)
+    private int StatusRank(Homework task, DateTimeOffset now)
     {
         int rank = task.Category switch
         {
-            "pending" => 0,
+            "pending" => task.IsExpired(now) ? 1 : 0,
             "done" when task.Status.Contains("待批阅") || task.Status.Contains("待批改") ||
-                        task.Status.Contains("待评阅") || task.Status.Contains("待评分") => 1,
-            "done" => 2,
-            _ => 3
+                        task.Status.Contains("待评阅") || task.Status.Contains("待评分") => 2,
+            "done" => 3,
+            _ => 4
         };
-        return sortDescending && rank < 3 ? 2 - rank : rank;
+        return sortDescending && rank < 4 ? 3 - rank : rank;
     }
 
     private void RenderRows()
     {
+        var now = DateTimeOffset.UtcNow;
         int first = grid.FirstDisplayedScrollingRowIndex;
+        SetHoveredRow(-1);
         grid.Rows.Clear();
-        int pending = tasks.Count(t => t.Category == "pending");
+        var pendingTasks = tasks.Where(t => t.Category == "pending" && !t.IsExpired(now)).ToArray();
+        nextPendingDeadline = pendingTasks.Min(t => t.Deadline);
+        int overdue = tasks.Count(t => t.Category == "pending" && t.IsExpired(now));
         int completed = tasks.Count(t => t.Category == "done");
-        int unknown = tasks.Count - pending - completed;
-        summary.Text = lastSync is null ? "" : $"待处理 {pending}  ·  已完成 {completed}" + (unknown == 0 ? "" : $"  ·  待确认 {unknown}");
+        int unknown = tasks.Count - pendingTasks.Length - overdue - completed;
+        summary.Text = lastSync is null ? "" : $"待处理 {pendingTasks.Length}  ·  已完成 {completed}"
+            + (overdue == 0 ? "" : $"  ·  截止未交 {overdue}") + (unknown == 0 ? "" : $"  ·  待确认 {unknown}");
         IEnumerable<Homework> selected = filter.SelectedIndex switch
         {
-            1 => tasks.Where(t => t.Category == "pending"),
+            1 => pendingTasks,
             2 => tasks.Where(t => t.Category == "done"),
             3 => tasks.Where(t => t.Category == "unknown"),
             _ => tasks
         };
-        foreach (var item in SortRows(selected))
+        foreach (var item in SortRows(selected, now))
         {
             string deadline = item.Deadline is { } end
                 ? end.ToOffset(TimeSpan.FromHours(8)).ToString(item.Estimated ? "'约 'yyyy-MM-dd HH:mm" : "yyyy-MM-dd HH:mm")
                 : "—";
-            int index = grid.Rows.Add(item.Title, item.Course, item.Status, deadline, "", "查看详情");
+            string status = item.Category == "pending" && item.IsExpired(now) ? "已截止，未提交" : item.Status;
+            int index = grid.Rows.Add(item.Title, item.Course, status, deadline, "", "查看详情");
             var row = grid.Rows[index];
             row.Tag = item;
             row.Cells[StatusColumn].Style.ForeColor = item.Category == "pending" ? Color.FromArgb(140, 71, 15) : Accent;
@@ -878,21 +948,29 @@ public partial class Form1 : Form
                 row.Cells[DetailsColumn] = new DataGridViewTextBoxCell { Value = "—" };
         }
         if (first >= 0 && first < grid.RowCount) grid.FirstDisplayedScrollingRowIndex = first;
-        UpdateCountdowns();
+        RefreshHoveredRow();
+        UpdateCountdowns(now);
     }
 
     private void UpdateCountdowns()
     {
         var now = DateTimeOffset.UtcNow;
+        if (nextPendingDeadline <= now)
+            RenderRows();
+        else
+            UpdateCountdowns(now);
+    }
+
+    private void UpdateCountdowns(DateTimeOffset now)
+    {
         foreach (DataGridViewRow row in grid.Rows)
         {
             if (row.Tag is not Homework task) continue;
-            string text = task.Timing ?? "未知";
-            if (task.Deadline is { } deadline)
+            string? text = task.IsExpired(now) ? "已截止" : task.Timing;
+            if (task.Deadline is { } deadline && text != "已截止")
             {
                 var delta = deadline - now;
-                text = delta <= TimeSpan.Zero ? "已截止" :
-                    delta.TotalDays >= 1 ? $"{delta.Days}天 {delta.Hours}时 {delta.Minutes}分" :
+                text = delta.TotalDays >= 1 ? $"{delta.Days}天 {delta.Hours}时 {delta.Minutes}分" :
                     delta.TotalHours >= 1 ? $"{delta.Hours} 小时 {delta.Minutes} 分" :
                     $"{delta.Minutes} 分 {delta.Seconds} 秒";
                 row.Cells[CountdownColumn].Style.ForeColor = task.Category == "pending" && delta.TotalHours < 24
@@ -917,7 +995,22 @@ public partial class Form1 : Form
     }
 
     private sealed record PageRead(string Kind, Homework[] Rows, bool Partial);
+
+    private sealed class HomeworkGrid : DataGridView
+    {
+        internal HomeworkGrid() => DoubleBuffered = true;
+    }
+
     private sealed record Homework(string Title, string Course, string Status, string Category, string? Url,
-        DateTimeOffset? Deadline, bool Estimated, string? Timing);
+        DateTimeOffset? Deadline, bool Estimated, string? Timing)
+    {
+        internal bool IsExpired(DateTimeOffset now)
+        {
+            if (Deadline is { } deadline) return deadline <= now;
+            string? timing = Timing?.Trim();
+            return timing is null or "" or "未知" or "—" ||
+                timing.Contains("已截止") || timing.Contains("已结束") || timing.Contains("已过期");
+        }
+    }
 }
 
