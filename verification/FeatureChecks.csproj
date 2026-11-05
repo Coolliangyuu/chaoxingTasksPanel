@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>StudyTasks</RootNamespace>
+    <Version>1.5.0</Version>
+    <CetCompat>false</CetCompat>
+    <StartupObject>StudyTasks.FeatureChecks</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../StudyTasks/*.cs" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3595.46" />
+    <EmbeddedResource Include="../StudyTasks/Login.js;../StudyTasks/Homework.js;../StudyTasks/AccountIdentity.js;../StudyTasks/AutoLogin.js;../StudyTasks/StudyTasks.ico;../StudyTasks/Toast.ps1" LogicalName="StudyTasks.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../version-history.txt" LogicalName="StudyTasks.VersionHistory.txt" />
+    <EmbeddedResource Include="../compatibility-policy.json" LogicalName="StudyTasks.CompatibilityPolicy.json" />
+  </ItemGroup>
+  <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup><Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" /></ItemGroup>
+  </Target>
+</Project>

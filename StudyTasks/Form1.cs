@@ -15,11 +15,11 @@ public partial class Form1 : Form
     private const int DeadlineColumn = 3;
     private const int CountdownColumn = 4;
     private const int DetailsColumn = 5;
-    private static readonly Color Ink = Color.FromArgb(21, 37, 56);
-    private static readonly Color Muted = Color.FromArgb(84, 103, 122);
-    private static readonly Color Accent = Color.FromArgb(16, 99, 125);
-    private static readonly Color HoverBackground = Color.FromArgb(218, 237, 245);
-    private static readonly Color Canvas = Color.FromArgb(241, 246, 250);
+    private static readonly Color Ink = Color.FromArgb(24, 40, 57);
+    private static readonly Color Muted = Color.FromArgb(100, 116, 133);
+    private static readonly Color Accent = Color.FromArgb(13, 113, 129);
+    private static readonly Color HoverBackground = Color.FromArgb(233, 245, 246);
+    private static readonly Color Canvas = Color.FromArgb(243, 247, 250);
     private WebView2 web = CreateBrowserView();
     private CoreWebView2Environment? browserEnvironment;
     private AccountPreferences accounts = AccountPreferences.Load();
@@ -57,8 +57,12 @@ public partial class Form1 : Form
     private int navigationVersion;
     private DateTimeOffset? lastSync;
     private DateTimeOffset? nextPendingDeadline;
+    private readonly ReminderEngine reminders;
+    private readonly System.Windows.Forms.Timer reminderTimer = new() { Interval = 15000 };
+    private readonly TrayLifetime trayLifetime;
+    private readonly CancellationTokenSource startupUpdateCancellation = new();
 
-    public Form1()
+    public Form1(bool startHidden = false)
     {
         Text = "学习通 · 作业看板";
         Icon = Program.WindowIcon;
@@ -131,7 +135,7 @@ public partial class Form1 : Form
         settings.Margin = Padding.Empty;
         settings.Click += (_, _) =>
         {
-            using var dialog = new SettingsDialog();
+            using var dialog = new SettingsDialog(SendTestNotification);
             dialog.ShowDialog(this);
         };
         footer.Controls.Add(settings, 1, 0);
@@ -170,16 +174,52 @@ public partial class Form1 : Form
                 RefreshNow();
         };
         clock.Tick += (_, _) => UpdateCountdowns();
-        Shown += async (_, _) => await InitializeBrowser();
+        trayLifetime = new TrayLifetime(this, Program.WindowIcon);
+        reminders = new ReminderEngine((title, message) => NotificationService.Send(title, message, trayLifetime.ShowReminder));
+        Shown += async (_, _) =>
+        {
+            StartupIntegration.Prompt(this);
+            if (IsDisposed) return;
+            if (startHidden) { WindowState = FormWindowState.Minimized; }
+            _ = CheckForUpdatesOnStartup();
+            reminderTimer.Start();
+            await InitializeBrowser();
+        };
+        reminderTimer.Tick += async (_, _) => await reminders.Check(DateTimeOffset.UtcNow,
+            AppPreferences.Current.RemindersEnabled, AppPreferences.Current.ReminderMinutes);
         FormClosed += (_, _) =>
         {
+            startupUpdateCancellation.Cancel();
             foreach (var detailWindow in openDetails.Values.ToArray())
                 detailWindow.Close();
             foreach (var check in accountChecks.Values) check.Cancel.Cancel();
             clock.Dispose();
             refreshTimer.Dispose();
+            reminderTimer.Dispose();
         };
     }
+
+    private async Task CheckForUpdatesOnStartup()
+    {
+        if (!AppPreferences.Current.AutoCheckUpdates) return;
+        try
+        {
+            var update = await UpdateService.Check(UpdateService.LoadSource(), startupUpdateCancellation.Token);
+            if (IsDisposed || startupUpdateCancellation.IsCancellationRequested ||
+                !AppPreferences.Current.AutoCheckUpdates || !update.HasUpdate) return;
+            using var prompt = new UpdatePrompt(update);
+            if (prompt.ShowDialog(this) == DialogResult.Yes && !UpdateService.OpenReleasePage(update.Source))
+                MessageBox.Show(this, "无法打开系统浏览器，请在设置中打开发行页重试。", "下载更新");
+        }
+        catch (OperationCanceledException) when (startupUpdateCancellation.IsCancellationRequested) { }
+    }
+
+    internal void ShowDashboard()
+    {
+        trayLifetime.ShowMainWindow();
+    }
+
+    private Task<NotificationResult> SendTestNotification() => NotificationService.SendTest(trayLifetime.ShowTestReminder);
 
     private async Task InitializeBrowser()
     {
@@ -197,8 +237,10 @@ public partial class Form1 : Form
             accountManager.Enabled = true;
             _ = CheckInactiveAccounts();
         }
-        catch (Exception ex) when (ex is COMException or InvalidOperationException or IOException)
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or IOException or WebView2RuntimeNotFoundException
+            or DllNotFoundException or BadImageFormatException)
         {
+            StartupDiagnostics.Write("浏览器初始化失败：" + ex);
             Fail("无法启动内置网页。请确认电脑可用的 Microsoft Edge WebView2 运行时已安装。");
         }
     }
@@ -358,6 +400,7 @@ public partial class Form1 : Form
             await check.Task;
         }
         SavedCredential.Remove(account.Profile);
+        reminders.Remove(account.Profile);
         autoLoginAttempts.Remove(account.Profile);
         foreach (var detailWindow in openDetails.Where(pair => pair.Key.Profile == account.Profile).Select(pair => pair.Value).ToArray())
             detailWindow.Close();
@@ -658,6 +701,10 @@ public partial class Form1 : Form
                 accountReports.GetValueOrDefault(account.Profile)?.Login != AccountLogin.SignedIn;
             official.Text = "学习通网页";
             tasks = page.Rows;
+            reminders.Replace(account.Profile, tasks.Where(t => t.Category == "pending" && t.Deadline is not null)
+                .Select(t => new ReminderAssignment(ReminderAssignment.MakeKey(account.Profile, t.Title, t.Course, t.Url),
+                    t.Title, t.Course, account.Label, t.Deadline!.Value, t.Estimated)).ToArray());
+            _ = reminders.Check(DateTimeOffset.UtcNow, AppPreferences.Current.RemindersEnabled, AppPreferences.Current.ReminderMinutes);
             lastSync = DateTimeOffset.Now;
             if (fromLogin) showOfficial = false;
             SetBrowserVisible(showOfficial);
@@ -791,14 +838,33 @@ public partial class Form1 : Form
         };
         grid.CellPainting += (_, e) =>
         {
-            if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.CellStyle is not { } style) return;
+            if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.CellStyle is not { } style || e.Graphics is not { } graphics) return;
             bool hovered = e.RowIndex == hoveredRow;
             bool current = grid.CurrentCellAddress == new Point(e.ColumnIndex, e.RowIndex);
-            if (!hovered && !current) return;
+            if (!hovered && !current && e.ColumnIndex != DetailsColumn) return;
 
             var originalBackground = style.BackColor;
             if (hovered) style.BackColor = HoverBackground;
-            e.Paint(e.ClipBounds, e.PaintParts & ~DataGridViewPaintParts.Focus);
+            if (e.ColumnIndex == DetailsColumn)
+            {
+                e.Paint(e.ClipBounds, e.PaintParts & ~(DataGridViewPaintParts.Focus |
+                    DataGridViewPaintParts.ContentForeground | DataGridViewPaintParts.ContentBackground));
+                var padding = style.Padding;
+                var bounds = new RectangleF(e.CellBounds.Left + padding.Left, e.CellBounds.Top + padding.Top,
+                    e.CellBounds.Width - padding.Horizontal - 1, e.CellBounds.Height - padding.Vertical - 1);
+                using var shape = ThemedButton.Rounded(bounds, 5f * DeviceDpi / 96f);
+                var previousSmoothing = graphics.SmoothingMode;
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var fill = new SolidBrush(hovered ? Color.FromArgb(240, 247, 249) : Color.White);
+                using var border = new Pen(Color.FromArgb(218, 227, 234));
+                graphics.FillPath(fill, shape);
+                graphics.DrawPath(border, shape);
+                graphics.SmoothingMode = previousSmoothing;
+                TextRenderer.DrawText(graphics, Convert.ToString(e.FormattedValue), style.Font ?? grid.Font,
+                    Rectangle.Round(bounds), Accent, TextFormatFlags.HorizontalCenter |
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            }
+            else e.Paint(e.ClipBounds, e.PaintParts & ~DataGridViewPaintParts.Focus);
             style.BackColor = originalBackground;
             e.Handled = true;
         };
@@ -982,7 +1048,7 @@ public partial class Form1 : Form
 
     internal static Button MakeButton(string title, bool primary = false)
     {
-        var button = new Button
+        var button = new ThemedButton
         {
             Text = title, AutoSize = true, Height = 32, Margin = new Padding(0, 2, 9, 0),
             FlatStyle = FlatStyle.Flat, UseVisualStyleBackColor = false,

@@ -4,7 +4,7 @@ internal sealed class VersionLogDialog : Form
 {
     internal VersionLogDialog()
     {
-        Text = "版本日志 · 学习通作业看板";
+        Text = "学习通作业看板 · 更新日志";
         Icon = Program.WindowIcon;
         Font = new Font("Microsoft YaHei UI", 10F);
         StartPosition = FormStartPosition.CenterParent;
@@ -19,7 +19,7 @@ internal sealed class VersionLogDialog : Form
         {
             Dock = DockStyle.Fill, ReadOnly = true, ScrollBars = RichTextBoxScrollBars.Vertical,
             DetectUrls = false, BackColor = Color.White, BorderStyle = BorderStyle.FixedSingle,
-            AccessibleName = "学习通作业看板版本日志", Text = reader.ReadToEnd()
+            AccessibleName = "学习通作业看板更新日志", Text = reader.ReadToEnd()
         };
         content.Select(0, 0);
 

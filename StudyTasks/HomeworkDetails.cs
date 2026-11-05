@@ -62,7 +62,7 @@ internal sealed class HomeworkDetails : Form
         StartPosition = isAttachmentPreview ? FormStartPosition.CenterParent : FormStartPosition.CenterScreen;
         ShowInTaskbar = !isAttachmentPreview;
         MinimumSize = new Size(640, 460);
-        ClientSize = new Size(1140, 820);
+        ClientSize = new Size(1240, 820);
 
         var header = new Panel { Dock = DockStyle.Top, Height = 71, Padding = new Padding(18, 8, 18, 7), BackColor = Color.FromArgb(241, 246, 250) };
         title.Font = new Font(Font.FontFamily, 15, FontStyle.Bold);

@@ -1,0 +1,7 @@
+{
+  "minimumMajor": 10,
+  "minimumBuild": 19045,
+  "require64Bit": true,
+  "description": "Windows 10 22H2（内部版本 19045）或更新的 64 位 Windows，包含 Windows 11",
+  "message": "此版本需要 Windows 10 22H2（内部版本 19045）或更新的 64 位 Windows，包含 Windows 11。\n\n当前系统不满足要求，无法安装或运行此版本。请升级 Windows 后重试。"
+}
